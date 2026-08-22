@@ -13,8 +13,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 	const fbclid = ctx.query.fbclid;
 
 	// redirect if facebook is the referer or request contains fbclid
-		if (referringURL?.includes('facebook.com') || fbclid) {
-
+	if (referringURL?.includes('facebook.com') || fbclid) {
 		return {
 			redirect: {
 				permanent: false,
@@ -23,7 +22,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 				}`,
 			},
 		};
-		}
+	}
 	const query = gql`
 		{
 			post(id: "/${path}/", idType: URI) {
@@ -49,19 +48,19 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 		}
 	`;
 
-let data;
+	let data;
 
-try {
-	data = await graphQLClient.request(query);
-} catch (error) {
-	console.error('GraphQL Error:', error);
+	try {
+		data = await graphQLClient.request(query);
+	} catch (error) {
+		console.error('GraphQL Error:', error);
 
-	return {
-		notFound: true,
-	};
-}
+		return {
+			notFound: true,
+		};
+	}
 
-if (!data.post) {
+	if (!data.post) {
 		return {
 			notFound: true,
 		};
@@ -101,19 +100,29 @@ const Post: React.FC<PostProps> = (props) => {
 				<meta property="og:site_name" content={host.split('.')[0]} />
 				<meta property="article:published_time" content={post.dateGmt} />
 				<meta property="article:modified_time" content={post.modifiedGmt} />
-				<meta property="og:image" content={post.featuredImage.node.sourceUrl} />
-				<meta
-					property="og:image:alt"
-					content={post.featuredImage.node.altText || post.title}
-				/>
+				
+				{/* Featured Image চেক করা হচ্ছে যাতে null error না আসে */}
+				{post.featuredImage?.node?.sourceUrl && (
+					<>
+						<meta property="og:image" content={post.featuredImage.node.sourceUrl} />
+						<meta
+							property="og:image:alt"
+							content={post.featuredImage.node.altText || post.title}
+						/>
+					</>
+				)}
 				<title>{post.title}</title>
 			</Head>
 			<div className="post-container">
 				<h1>{post.title}</h1>
-				<img
-					src={post.featuredImage.node.sourceUrl}
-					alt={post.featuredImage.node.altText || post.title}
-				/>
+				
+				{/* Featured Image চেক করে img ট্যাগ রেন্ডার করা হচ্ছে */}
+				{post.featuredImage?.node?.sourceUrl && (
+					<img
+						src={post.featuredImage.node.sourceUrl}
+						alt={post.featuredImage.node.altText || post.title}
+					/>
+				)}
 				<article dangerouslySetInnerHTML={{ __html: post.content }} />
 			</div>
 		</>
