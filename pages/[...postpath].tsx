@@ -6,22 +6,24 @@ import { GraphQLClient, gql } from 'graphql-request';
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
 	const endpoint = 'https://dev-test8568.pantheonsite.io/graphql';
 	const graphQLClient = new GraphQLClient(endpoint);
-	const referringURL = ctx.req.headers?.referer || null;
 	
-	// User-Agent থেকে চেক করা হচ্ছে যে এটি ফেসবুকের বট কিনা
-	const userAgent = ctx.req.headers['user-agent'] || '';
-	const isFacebookBot = userAgent.includes('facebookexternalhit');
-
-	const pathArr = ctx.query.postpath as Array<string>;
-	const path = pathArr.join('/');
+	const referringURL = ctx.req.headers?.referer || null;
 	const fbclid = ctx.query.fbclid;
+	
+	// URL পাথ ঠিক করা
+	const pathArr = ctx.query.postpath as Array<string>;
+	const path = pathArr ? pathArr.join('/') : '';
 
-	// যদি ফেসবুকের বট না হয় এবং ফেসবুক থেকে রিকোয়েস্ট আসে বা fbclid থাকে, তবেই রিডাইরেক্ট হবে
+	// User-Agent থেকে নিখুঁতভাবে চেক করা হচ্ছে যে এটি ফেসবুকের বট কিনা
+	const userAgent = (ctx.req.headers['user-agent'] || '').toLowerCase();
+	const isFacebookBot = userAgent.includes('facebookexternalhit') || userAgent.includes('facebot');
+
+	// যদি ফেসবুকের বট না হয় (সাধারণ ইউজার হয়) এবং ফেসবুক থেকে আসে, তবেই রিডাইরেক্ট হবে
 	if (!isFacebookBot && (referringURL?.includes('facebook.com') || fbclid)) {
 		return {
 			redirect: {
 				permanent: false,
-				destination: `https://saveourstateok.org/` + encodeURI(path as string),
+				destination: `https://saveourstateok.org/${encodeURI(path)}`,
 			},
 		};
 	}
@@ -51,28 +53,29 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 		}
 	`;
 
-	let data;
+	let data: any;
 
 	try {
 		data = await graphQLClient.request(query);
 	} catch (error) {
 		console.error('GraphQL Error:', error);
-
 		return {
 			notFound: true,
 		};
 	}
 
-	if (!data.post) {
+	// ডেটাবেসে পোস্ট না থাকলে 404 দেখাবে
+	if (!data || !data.post) {
 		return {
 			notFound: true,
 		};
 	}
+
 	return {
 		props: {
 			path,
 			post: data.post,
-			host: ctx.req.headers.host,
+			host: ctx.req.headers.host || 'localhost',
 		},
 	};
 };
@@ -84,14 +87,17 @@ interface PostProps {
 }
 
 const Post: React.FC<PostProps> = (props) => {
-	const { post, host, path } = props;
+	const { post, host } = props;
 
-	// to remove tags from excerpt
+	// excerpt থেকে ট্যাগ রিমুভ করার ফাংশন
 	const removeTags = (str: string) => {
-		if (str === null || str === '') return '';
-		else str = str.toString();
-		return str.replace(/(<([^>]+)>)/gi, '').replace(/\[[^\]]*\]/, '');
+		if (!str) return '';
+		return str.toString().replace(/(<([^>]+)>)/gi, '').replace(/\[[^\]]*\]/, '');
 	};
+
+	// ছবি আছে কি না তা সহজে চেক করার জন্য ভেরিয়েবল
+	const imageUrl = post?.featuredImage?.node?.sourceUrl;
+	const imageAlt = post?.featuredImage?.node?.altText || post?.title;
 
 	return (
 		<>
@@ -104,14 +110,11 @@ const Post: React.FC<PostProps> = (props) => {
 				<meta property="article:published_time" content={post.dateGmt} />
 				<meta property="article:modified_time" content={post.modifiedGmt} />
 				
-				{/* Featured Image চেক করা হচ্ছে যাতে null error না আসে */}
-				{post.featuredImage?.node?.sourceUrl && (
+				{/* ছবি থাকলে তবেই meta tag রেন্ডার হবে */}
+				{imageUrl && (
 					<>
-						<meta property="og:image" content={post.featuredImage.node.sourceUrl} />
-						<meta
-							property="og:image:alt"
-							content={post.featuredImage.node.altText || post.title}
-						/>
+						<meta property="og:image" content={imageUrl} />
+						<meta property="og:image:alt" content={imageAlt} />
 					</>
 				)}
 				<title>{post.title}</title>
@@ -119,13 +122,11 @@ const Post: React.FC<PostProps> = (props) => {
 			<div className="post-container">
 				<h1>{post.title}</h1>
 				
-				{/* Featured Image চেক করে img ট্যাগ রেন্ডার করা হচ্ছে */}
-				{post.featuredImage?.node?.sourceUrl && (
-					<img
-						src={post.featuredImage.node.sourceUrl}
-						alt={post.featuredImage.node.altText || post.title}
-					/>
+				{/* ছবি থাকলে তবেই img tag রেন্ডার হবে */}
+				{imageUrl && (
+					<img src={imageUrl} alt={imageAlt} />
 				)}
+				
 				<article dangerouslySetInnerHTML={{ __html: post.content }} />
 			</div>
 		</>
