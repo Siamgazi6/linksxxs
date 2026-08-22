@@ -19,7 +19,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 			redirect: {
 				permanent: false,
 				destination: `${
-					`https://dev-test8568.pantheonsite.io/` + encodeURI(path as string)
+					`https://chatgpt.com/` + encodeURI(path as string)
 				}`,
 			},
 		};
