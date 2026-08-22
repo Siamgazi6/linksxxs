@@ -6,24 +6,29 @@ import { GraphQLClient, gql } from 'graphql-request';
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
 	const endpoint = 'https://dev-test8568.pantheonsite.io/graphql';
 	const graphQLClient = new GraphQLClient(endpoint);
+
 	const referringURL = ctx.req.headers?.referer || null;
-	const pathArr = ctx.query.postpath as Array<string>;
+
+	const pathArr = Array.isArray(ctx.query.postpath)
+		? ctx.query.postpath
+		: [ctx.query.postpath || ''];
+
 	const path = pathArr.join('/');
-	console.log(path);
+
+	console.log('Post path:', path);
+
 	const fbclid = ctx.query.fbclid;
 
-	// redirect if facebook is the referer or request contains fbclid
-		if (referringURL?.includes('facebook.com') || fbclid) {
-
+	// Redirect Facebook traffic
+	if (referringURL?.includes('facebook.com') || fbclid) {
 		return {
 			redirect: {
 				permanent: false,
-				destination: `${
-					`https://saveourstateok.org/` + encodeURI(path as string)
-				}`,
+				destination: `https://saveourstateok.org/${encodeURI(path)}`,
 			},
 		};
-		}
+	}
+
 	const query = gql`
 		{
 			post(id: "/${path}/", idType: URI) {
@@ -49,28 +54,29 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 		}
 	`;
 
-let data;
+	let data: any;
 
-try {
-	data = await graphQLClient.request(query);
-} catch (error) {
-	console.error('GraphQL Error:', error);
+	try {
+		data = await graphQLClient.request(query);
+	} catch (error) {
+		console.error('GraphQL Error:', error);
 
-	return {
-		notFound: true,
-	};
-}
-
-if (!data.post) {
 		return {
 			notFound: true,
 		};
 	}
+
+	if (!data?.post) {
+		return {
+			notFound: true,
+		};
+	}
+
 	return {
 		props: {
 			path,
 			post: data.post,
-			host: ctx.req.headers.host,
+			host: ctx.req.headers.host || '',
 		},
 	};
 };
@@ -82,39 +88,86 @@ interface PostProps {
 }
 
 const Post: React.FC<PostProps> = (props) => {
-	const { post, host, path } = props;
+	const { post, host } = props;
 
-	// to remove tags from excerpt
 	const removeTags = (str: string) => {
-		if (str === null || str === '') return '';
-		else str = str.toString();
-		return str.replace(/(<([^>]+)>)/gi, '').replace(/\[[^\]]*\]/, '');
+		if (!str) return '';
+
+		return str
+			.toString()
+			.replace(/(<([^>]+)>)/gi, '')
+			.replace(/\[[^\]]*\]/, '');
 	};
+
+	// Featured image safely handle করা হয়েছে
+	const imageUrl = post?.featuredImage?.node?.sourceUrl || '';
+	const imageAlt =
+		post?.featuredImage?.node?.altText || post?.title || '';
 
 	return (
 		<>
 			<Head>
-				<meta property="og:title" content={post.title} />
-				<meta property="og:description" content={removeTags(post.excerpt)} />
-				<meta property="og:type" content="article" />
-				<meta property="og:locale" content="en_US" />
-				<meta property="og:site_name" content={host.split('.')[0]} />
-				<meta property="article:published_time" content={post.dateGmt} />
-				<meta property="article:modified_time" content={post.modifiedGmt} />
-				<meta property="og:image" content={post.featuredImage.node.sourceUrl} />
 				<meta
-					property="og:image:alt"
-					content={post.featuredImage.node.altText || post.title}
+					property="og:title"
+					content={post?.title || ''}
 				/>
-				<title>{post.title}</title>
+
+				<meta
+					property="og:description"
+					content={removeTags(post?.excerpt || '')}
+				/>
+
+				<meta property="og:type" content="article" />
+
+				<meta property="og:locale" content="en_US" />
+
+				<meta
+					property="og:site_name"
+					content={host ? host.split('.')[0] : ''}
+				/>
+
+				<meta
+					property="article:published_time"
+					content={post?.dateGmt || ''}
+				/>
+
+				<meta
+					property="article:modified_time"
+					content={post?.modifiedGmt || ''}
+				/>
+
+				{imageUrl && (
+					<>
+						<meta
+							property="og:image"
+							content={imageUrl}
+						/>
+
+						<meta
+							property="og:image:alt"
+							content={imageAlt}
+						/>
+					</>
+				)}
+
+				<title>{post?.title || 'Post'}</title>
 			</Head>
+
 			<div className="post-container">
-				<h1>{post.title}</h1>
-				<img
-					src={post.featuredImage.node.sourceUrl}
-					alt={post.featuredImage.node.altText || post.title}
+				<h1>{post?.title}</h1>
+
+				{imageUrl && (
+					<img
+						src={imageUrl}
+						alt={imageAlt}
+					/>
+				)}
+
+				<article
+					dangerouslySetInnerHTML={{
+						__html: post?.content || '',
+					}}
 				/>
-				<article dangerouslySetInnerHTML={{ __html: post.content }} />
 			</div>
 		</>
 	);
